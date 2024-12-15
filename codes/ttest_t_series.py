@@ -5,20 +5,10 @@ from scipy.stats import ttest_1samp
 #Set the paths
 main_directory = "Users/harunfurkankanik/Desktop/FoodNoFood-main"
 BOLD_folder = f"{main_directory}/volume"
-output_folder = f"{main_directory}/TimeSeries"
+output_folder = f"{main_directory}/TimeSeries_food_NonFood"
 
 #Specify the subjects
 subject_id = "sub-01"
-
-#Set experiment paremeter
-num_blocks = 8
-rest_block_duration = 16
-stimils_block_duration = 16
-Total_block_duration = 32
-TR = 1.6
-start_index = 1
-end_index = 32
-duration = end_index - start_index + 1
 
 #Load BOLD data
 nii_data = nib.load (f"{BOLD_folder}/sub-01.nii")
@@ -46,7 +36,6 @@ time_points_food = [
     [13, 61, 103, 150, 200, 247, 292, 334],
     [14, 62, 104, 151, 201, 248, 293, 335],
     [15, 63, 105, 152, 202, 249, 294, 336],
-    [16, 64, 106, 153, 203, 250, 295, 337]
 ]
 
 time_points_NonFood = [
@@ -65,59 +54,41 @@ time_points_NonFood = [
     [37, 82, 124, 169, 221, 269, 311, 358],  
     [38, 83, 125, 170, 222, 270, 312, 359],  
     [39, 84, 126, 171, 223, 271, 313, 360],  
-    [40, 85, 127, 172, 224, 272, 314, 361],
-    [41, 86, 128, 173, 225, 273, 315, 362]   
+    [40, 85, 127, 172, 224, 272, 314, 361],  
 ]
 
-t_series_food=[]
+# Function to compute t-values and save the time series
+def compute_t_series(time_points, condition_name):
+    t_series = []  # Store 3D t-value maps for all volumes
 
-for block_idx, block_time_points in enumerate (time_points_food):
-    #extract time series for food
-    time_series_food = final_image[:, :, :, block_time_points]
+    for volume_idx, block_time_points in enumerate(time_points):
+        # Extract time series for the current volume
+        volume_data = final_image[:, :, :, block_time_points]
 
-    #Perform t-test
-    t_values = np.zeros((xdim, ydim, zdim))
-    for i in range(xdim):
-        for j in range(ydim):
-            for k in range(zdim):
-                voxel_data = time_series_food[i, j, k, :]
-                if np.any(voxel_data):  # Ensure data is not all zero
-                    t, _ = ttest_1samp(voxel_data, 0, nan_policy="omit")
-                    t_values[i, j, k] = t
+        # Initialize t-values array
+        t_values = np.zeros((xdim, ydim, zdim))
 
-    t_series_food.append(t_values)
+        # Compute t-test for each voxel
+        for i in range(xdim):
+            for j in range(ydim):
+                for k in range(zdim):
+                    voxel_data = volume_data[i, j, k, :]
+                    if np.any(voxel_data):  # Ensure the voxel has valid data
+                        t, _ = ttest_1samp(voxel_data, 0, nan_policy="omit")
+                        t_values[i, j, k] = t
 
-    t_series_4d = np.stack(t_series_food, axis = 3)
+        t_series.append(t_values)  # Add 3D t-map to the time series
 
-    # Save the time series
-    output_filename = f"{output_folder}/{subject_id}_t_series_food.nii.gz"
-    output_image = nib.Nifti1Image(t_series_4d, affine = nii_data.affine)
+    # Stack all 3D t-value maps into a 4D image
+    t_series_4d = np.stack(t_series, axis=3)
+
+    # Save the 4D time series to a NIfTI file
+    output_filename = f"{output_folder}/{subject_id}_t_series_{condition_name}.nii.gz"
+    output_image = nib.Nifti1Image(t_series_4d, affine=nii_data.affine)
     output_image.set_data_dtype(np.float32)
     nib.save(output_image, output_filename)
+    print(f"Saved {condition_name} time series to: {output_filename}")
 
-
-t_series_Nonfood=[]
-for block_idx_NonFood, block_time_points_NonFood in enumerate (time_points_NonFood):
-    #extract time series for NonFood
-    time_series_NonFood = final_image[:, :, :, block_time_points_NonFood]
-
-#Perform t-test
-    t_values_n = np.zeros((xdim, ydim, zdim))
-    for i in range(xdim):
-        for j in range(ydim):
-            for k in range(zdim):
-                voxel_data_n = time_series_NonFood[i, j, k, :]
-                if np.any(voxel_data_n):  # Ensure data is not all zero
-                    t, _ = ttest_1samp(voxel_data_n, 0, nan_policy="omit")
-                    t_values_n[i, j, k] = t
-                    
-    t_series_Nonfood.append(t_values_n)
-
-    t_series_4d_n = np.stack(t_series_Nonfood, axis = 3)
-
-    #Save the time series for NonFood
-    output_filename_1 = f"{output_folder}/{subject_id}_t_series_nonfood.nii.gz"
-    output_image_1 = nib.Nifti1Image(t_series_4d_n, affine = nii_data.affine)
-    output_image_1.set_data_dtype(np.float32)
-    nib.save(output_image_1, output_filename_1)
-
+# Compute and save time series for Food and NonFood conditions
+compute_t_series(time_points_food, "food")
+compute_t_series(time_points_NonFood, "nonfood")
